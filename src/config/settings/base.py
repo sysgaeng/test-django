@@ -10,8 +10,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 
-PROJECT_NAME = "#{PROJECT_NAME}"
-SITE_NAME = "#{PROJECT_NAME}"
+PROJECT_NAME = "test"
+SITE_NAME = "test"
 SITE_LOGO = "img/logo.png"  # app/staticfiles/static/img/logo.png 변경
 DOMAIN = "domain.com"
 
