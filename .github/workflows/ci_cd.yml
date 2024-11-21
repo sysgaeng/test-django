@@ -1,0 +1,181 @@
+name: CI/CD
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  continuous_integration:
+    if: ${{ !contains(github.event.head_commit.message, 'initial commit') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Environments
+        run: |
+          echo PROJECT_NAME=$(echo "${{ github.repository }}" | sed "s|${{ github.repository_owner }}\/||g" | sed "s|-django||g") >> $GITHUB_ENV
+          echo PROJECT_ENV=$(test ${GITHUB_REF##*/} = main && echo prod || echo dev) >> $GITHUB_ENV
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build & Push Backend Image
+        uses: docker/build-push-action@v2
+        with:
+          context: src
+          build-args: |
+            CI=true
+            APP_ENV=${{ env.PROJECT_ENV }}
+            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          push: true
+          tags: >-
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:${{ env.PROJECT_ENV }},
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  continuous_deployment:
+    runs-on: ubuntu-latest
+    needs: [ continuous_integration ]
+    steps:
+      - name: Set Environments
+        run: |
+          echo PROJECT_NAME=$(echo "${{ github.repository }}" | sed "s|${{ github.repository_owner }}\/||g" | sed "s|-django||g") >> $GITHUB_ENV
+          echo PROJECT_ENV=$(test ${GITHUB_REF##*/} = main && echo prod || echo dev) >> $GITHUB_ENV
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Download Web TaskDefinition
+        id: tf-web-download
+        continue-on-error: true
+        run: aws ecs describe-task-definition --task-definition ${{ env.PROJECT_NAME }}-${{ env.PROJECT_ENV }}-web-family --query taskDefinition > web.tf.json
+
+      - name: Render Web TaskDefinition
+        id: tf-web-render
+        if: steps.tf-web-download.outcome == 'success'
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: web.tf.json
+          container-name: web
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:${{ github.sha }}
+
+      - name: Deploy Web Service
+        if: steps.tf-web-download.outcome == 'success'
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.tf-web-render.outputs.task-definition }}
+          cluster: ${{ env.PROJECT_NAME }}-${{ env.PROJECT_ENV }}-ecs-cluster
+          service: web
+
+#      - name: Download Websocket TaskDefinition
+#        id: tf-websocket-download
+#        continue-on-error: true
+#        run: aws ecs describe-task-definition --task-definition ${{ env.PROJECT_NAME }}-${{ env.PROJECT_ENV }}-websocket-family --query taskDefinition > websocket.tf.json
+#
+#      - name: Render Websocket TaskDefinition
+#        id: tf-websocket-render
+#        if: steps.tf-websocket-download.outcome == 'success'
+#        uses: aws-actions/amazon-ecs-render-task-definition@v1
+#        with:
+#          task-definition: websocket.tf.json
+#          container-name: websocket
+#          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:${{ github.sha }}
+#
+#      - name: Deploy Websocket Service
+#        if: steps.tf-websocket-download.outcome == 'success'
+#        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+#        with:
+#          task-definition: ${{ steps.tf-websocket-render.outputs.task-definition }}
+#          cluster: ${{ env.PROJECT_NAME }}-${{ env.PROJECT_ENV }}-ecs-cluster
+#          service: websocket
+
+      - name: Changed Celery
+        uses: tj-actions/changed-files@v35
+        id: changed-celery
+        with:
+          files: |
+            src/app/**/tasks.py
+            src/app/**/models.py
+            src/config/tasks.py
+            src/config/settings/*.py
+
+      - name: Download Celery TaskDefinition
+        id: tf-celery-download
+        if: steps.changed-celery.outputs.any_changed == 'true'
+        continue-on-error: true
+        run: aws ecs describe-task-definition --task-definition ${{ env.PROJECT_NAME }}-${{ env.PROJECT_ENV }}-celery-family --query taskDefinition > celery.tf.json
+
+      - name: Render Celery TaskDefinition
+        id: tf-celery-render
+        if: steps.tf-celery-download.outcome == 'success'
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: celery.tf.json
+          container-name: celery
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:${{ github.sha }}
+
+      - name: Deploy Celery Service
+        if: steps.tf-celery-download.outcome == 'success'
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.tf-celery-render.outputs.task-definition }}
+          cluster: ${{ env.PROJECT_NAME }}-${{ env.PROJECT_ENV }}-ecs-cluster
+          service: celery
+
+#      - name: Changed Celerybeat
+#        uses: tj-actions/changed-files@v35
+#        id: changed-celerybeat
+#        with:
+#          files: |
+#            src/config/schedules.py
+#            src/config/tasks.py
+#            src/config/settings/*.py
+#
+#      - name: Download CeleryBeat TaskDefinition
+#        id: tf-celerybeat-download
+#        if: steps.changed-celerybeat.outputs.any_changed == 'true'
+#        continue-on-error: true
+#        run: aws ecs describe-task-definition --task-definition ${{ env.PROJECT_NAME }}-${{ env.PROJECT_ENV }}-celerybeat-family --query taskDefinition > celerybeat.tf.json
+#
+#      - name: Render CeleryBeat TaskDefinition
+#        id: tf-celerybeat-render
+#        if: steps.tf-celerybeat-download.outcome == 'success'
+#        uses: aws-actions/amazon-ecs-render-task-definition@v1
+#        with:
+#          task-definition: celerybeat.tf.json
+#          container-name: celerybeat
+#          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-backend:${{ github.sha }}
+#
+#      - name: Deploy Celerybeat Service
+#        if: steps.tf-celerybeat-download.outcome == 'success'
+#        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+#        with:
+#          task-definition: ${{ steps.tf-celerybeat-render.outputs.task-definition }}
+#          cluster: ${{ env.PROJECT_NAME }}-${{ env.PROJECT_ENV }}-ecs-cluster
+#          service: celerybeat

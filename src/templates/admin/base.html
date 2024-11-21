@@ -1,0 +1,29 @@
+{% extends 'admin/base.html' %}
+{% block extrahead %}
+<style>
+    html[data-theme="light"],
+    :root {
+        --primary: #4575f5 !important; /* 400 */
+        --secondary: #3f4cb2; /* 500 */
+        --selected-row: #FEF1CF; /* 100 */
+
+        --button-hover-bg: var(--secondary);
+        --default-button-hover-bg: #0c1f6f;
+    }
+
+    html[data-theme="dark"] {
+        --selected-row: #B55408; /* 700 */
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --selected-row: #B55408; /* 700 */
+        }
+    }
+
+</style>
+{% endblock %}
+
+
+
+

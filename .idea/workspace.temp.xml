@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DjangoConsoleOptions" custom-start-script="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)" module-name="django" is-module-sdk="true">
+    <envs>
+      <env key="DJANGO_SETTINGS_MODULE" value="config.settings.local" />
+    </envs>
+    <option name="myCustomStartScript" value="import sys; print('Python %s on %s' % (sys.version, sys.platform))&#10;import django; print('Django %s' % django.get_version())&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;if 'setup' in dir(django): django.setup()&#10;import django_manage_shell; django_manage_shell.run(PROJECT_ROOT)" />
+    <option name="myUseModuleSdk" value="true" />
+    <option name="myModuleName" value="django" />
+    <option name="myEnvs">
+      <map>
+        <entry key="DJANGO_SETTINGS_MODULE" value="config.settings.local" />
+      </map>
+    </option>
+  </component>
+  <component name="PyConsoleOptionsProvider">
+    <option name="myPythonConsoleState">
+      <console-settings module-name="django" is-module-sdk="true">
+        <envs>
+          <env key="DJANGO_SETTINGS_MODULE" value="config.settings.local" />
+        </envs>
+        <option name="myUseModuleSdk" value="true" />
+        <option name="myModuleName" value="django" />
+        <option name="myEnvs">
+          <map>
+            <entry key="DJANGO_SETTINGS_MODULE" value="config.settings.local" />
+          </map>
+        </option>
+      </console-settings>
+    </option>
+  </component>
+  <component name="TerminalProjectNonSharedOptionsProvider">
+    <envs>
+      <env key="DJANGO_SETTINGS_MODULE" value="config.settings.local" />
+    </envs>
+  </component>
+</project>
